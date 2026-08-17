@@ -1,5 +1,4 @@
 import chromadb
-from chromadb.utils import embedding_functions
 import os
 
 CHROMA_DIR = "chroma_data"
@@ -10,12 +9,32 @@ chroma_client = chromadb.PersistentClient(path=CHROMA_DIR)
 collection = chroma_client.get_or_create_collection(name="documents")
 
 
-def add_chunks(chunks: list[str], document_id: int, company_id: int):
-    ids = [f"doc{document_id}_chunk{i}" for i in range(len(chunks))]
-    metadatas = [{"company_id": company_id, "document_id": document_id} for _ in chunks]
+def add_chunks(
+    chunks,
+    document_id: int,
+    company_id: int,
+    filename: str,
+):
+    ids = [
+        f"doc{document_id}_chunk{chunk.chunk_index}"
+        for chunk in chunks
+    ]
+
+    metadatas = [
+        {
+            "company_id": company_id,
+            "document_id": document_id,
+            "filename": filename,
+            "page_number": chunk.page_number,
+            "chunk_index": chunk.chunk_index,
+        }
+        for chunk in chunks
+    ]
+
+    documents = [chunk.text for chunk in chunks]
 
     collection.add(
-        documents=chunks,
+        documents=documents,
         ids=ids,
         metadatas=metadatas,
     )
@@ -27,4 +46,5 @@ def query_chunks(question: str, company_id: int, top_k: int = 3):
         n_results=top_k,
         where={"company_id": company_id},
     )
+
     return results
