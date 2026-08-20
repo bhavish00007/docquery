@@ -26,8 +26,17 @@ export default function LoginPage() {
         throw new Error("Invalid email or password");
       }
 
-      const data = await res.json();
-      localStorage.setItem("token", data.access_token);
+     const data = await res.json();
+
+console.log("LOGIN RESPONSE:", data);
+console.log("ACCESS TOKEN:", data.access_token);
+
+localStorage.setItem("token", data.access_token);
+
+console.log(
+  "TOKEN SAVED:",
+  localStorage.getItem("token")
+);
       router.push("/chat");
     } catch (err) {
       setError("Invalid email or password");
