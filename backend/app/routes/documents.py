@@ -15,6 +15,7 @@ from app.models.user import User
 router = APIRouter()
 
 UPLOAD_DIR = "uploads"
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
@@ -93,3 +94,25 @@ def upload_document(
         ),
         "chunks_created": len(chunks),
     }
+
+
+@router.get("")
+def get_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    documents = (
+        db.query(Document)
+        .filter(Document.company_id == current_user.company_id)
+        .order_by(Document.id.desc())
+        .all()
+    )
+
+    return [
+        {
+            "document_id": document.id,
+            "filename": document.filename,
+            "status": document.status,
+        }
+        for document in documents
+    ]
