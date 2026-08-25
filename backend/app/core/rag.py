@@ -5,40 +5,118 @@ from google import genai
 from app.core.vectorstore import query_chunks
 
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY")
+)
 
 
-def answer_question(question: str, company_id: int) -> dict:
+RELEVANCE_DISTANCE_THRESHOLD = float(
+    os.getenv(
+        "RELEVANCE_DISTANCE_THRESHOLD",
+        "1.2",
+    )
+)
+
+
+FALLBACK_ANSWER = (
+    "I don't have enough information to answer that."
+)
+
+
+def answer_question(
+    question: str,
+    company_id: int,
+) -> dict:
+
     results = query_chunks(
         question,
         company_id=company_id,
         top_k=3,
     )
 
-    retrieved_chunks = results["documents"][0]
-    retrieved_metadatas = results["metadatas"][0]
+    retrieved_chunks = results.get(
+        "documents",
+        [[]],
+    )[0]
 
-    context = "\n\n".join(retrieved_chunks)
+    retrieved_metadatas = results.get(
+        "metadatas",
+        [[]],
+    )[0]
 
-    prompt = f"""You are a helpful assistant answering questions based ONLY on the provided context.
+    distances = results.get(
+        "distances",
+        [[]],
+    )[0]
 
-If the answer is not in the context, say "I don't have enough information to answer that."
+    relevant_chunks = []
+    relevant_metadatas = []
+
+    for text, metadata, distance in zip(
+        retrieved_chunks,
+        retrieved_metadatas,
+        distances,
+    ):
+        if distance <= RELEVANCE_DISTANCE_THRESHOLD:
+            relevant_chunks.append(text)
+            relevant_metadatas.append(metadata)
+
+    # Nothing relevant was retrieved.
+    if not relevant_chunks:
+        return {
+            "answer": FALLBACK_ANSWER,
+            "sources": [],
+        }
+
+    context = "\n\n".join(
+        relevant_chunks
+    )
+
+    prompt = f"""
+You are a helpful assistant answering questions
+based ONLY on the provided context.
+
+Rules:
+
+1. Use only the provided context.
+2. Do not use outside knowledge.
+3. If the answer is not clearly supported by
+   the context, say exactly:
+   "{FALLBACK_ANSWER}"
+4. Do not guess or invent information.
+5. Keep the answer concise and directly answer
+   the question.
 
 Context:
 {context}
 
-Question: {question}
+Question:
+{question}
 
-Answer:"""
+Answer:
+"""
 
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
     )
 
+    answer = response.text.strip()
+
+    # If the model could not answer from the context,
+    # do not display potentially misleading sources.
+    if answer.lower() == FALLBACK_ANSWER.lower():
+        return {
+            "answer": FALLBACK_ANSWER,
+            "sources": [],
+        }
+
     sources = []
 
-    for text, metadata in zip(retrieved_chunks, retrieved_metadatas):
+    for text, metadata in zip(
+        relevant_chunks,
+        relevant_metadatas,
+    ):
         sources.append(
             {
                 "filename": metadata["filename"],
@@ -49,6 +127,6 @@ Answer:"""
         )
 
     return {
-        "answer": response.text,
+        "answer": answer,
         "sources": sources,
     }
