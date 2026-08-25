@@ -38,10 +38,25 @@ def upload_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not file.filename.endswith(".pdf"):
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are supported",
+        )
+
+    existing_document = (
+        db.query(Document)
+        .filter(
+            Document.filename == file.filename,
+            Document.company_id == current_user.company_id,
+        )
+        .first()
+    )
+
+    if existing_document:
+        raise HTTPException(
+            status_code=400,
+            detail="A document with this filename already exists.",
         )
 
     file_path = os.path.join(UPLOAD_DIR, file.filename)
