@@ -5,10 +5,9 @@ from google import genai
 from app.core.vectorstore import query_chunks
 
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
+FALLBACK_ANSWER = (
+    "I don't have enough information to answer that."
 )
-
 
 RELEVANCE_DISTANCE_THRESHOLD = float(
     os.getenv(
@@ -18,9 +17,17 @@ RELEVANCE_DISTANCE_THRESHOLD = float(
 )
 
 
-FALLBACK_ANSWER = (
-    "I don't have enough information to answer that."
-)
+def get_gemini_client():
+    api_key = os.getenv("GEMINI_API_KEY")
+
+    if not api_key:
+        raise RuntimeError(
+            "GEMINI_API_KEY is not configured."
+        )
+
+    return genai.Client(
+        api_key=api_key
+    )
 
 
 def answer_question(
@@ -61,7 +68,6 @@ def answer_question(
             relevant_chunks.append(text)
             relevant_metadatas.append(metadata)
 
-    # Nothing relevant was retrieved.
     if not relevant_chunks:
         return {
             "answer": FALLBACK_ANSWER,
@@ -96,6 +102,8 @@ Question:
 Answer:
 """
 
+    client = get_gemini_client()
+
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents=prompt,
@@ -103,8 +111,6 @@ Answer:
 
     answer = response.text.strip()
 
-    # If the model could not answer from the context,
-    # do not display potentially misleading sources.
     if answer.lower() == FALLBACK_ANSWER.lower():
         return {
             "answer": FALLBACK_ANSWER,
