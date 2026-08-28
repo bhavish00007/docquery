@@ -27,6 +27,8 @@ from app.models.user import User
 router = APIRouter()
 
 UPLOAD_DIR = "uploads"
+MAX_FILE_SIZE = 10 * 1024 * 1024
+UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -54,6 +56,42 @@ def extract_text_from_pdf(
     return pages
 
 
+def save_uploaded_file(
+    file: UploadFile,
+    file_path: str,
+) -> None:
+    total_size = 0
+    first_chunk = True
+
+    with open(file_path, "wb") as buffer:
+        while True:
+            chunk = file.file.read(
+                UPLOAD_CHUNK_SIZE
+            )
+
+            if not chunk:
+                break
+
+            if first_chunk:
+                first_chunk = False
+
+                if not chunk.startswith(b"%PDF-"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="The uploaded file is not a valid PDF.",
+                    )
+
+            total_size += len(chunk)
+
+            if total_size > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail="PDF file size must not exceed 10 MB.",
+                )
+
+            buffer.write(chunk)
+
+
 @router.post("/upload")
 def upload_document(
     file: UploadFile = File(...),
@@ -66,7 +104,15 @@ def upload_document(
             detail="Filename is required",
         )
 
-    if not file.filename.lower().endswith(".pdf"):
+    original_filename = file.filename.strip()
+
+    if not original_filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Filename is required",
+        )
+
+    if not original_filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are supported",
@@ -75,7 +121,7 @@ def upload_document(
     existing_document = (
         db.query(Document)
         .filter(
-            Document.filename == file.filename,
+            Document.filename == original_filename,
             Document.company_id == current_user.company_id,
         )
         .first()
@@ -87,19 +133,8 @@ def upload_document(
             detail="A document with this filename already exists.",
         )
 
-    file_path = os.path.join(
-        UPLOAD_DIR,
-        file.filename,
-    )
-
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(
-            file.file,
-            buffer,
-        )
-
     new_document = Document(
-        filename=file.filename,
+        filename=original_filename,
         company_id=current_user.company_id,
         status="processing",
     )
@@ -108,8 +143,20 @@ def upload_document(
     db.commit()
     db.refresh(new_document)
 
+    file_path = os.path.join(
+        UPLOAD_DIR,
+        f"document_{new_document.id}.pdf",
+    )
+
     try:
-        pages = extract_text_from_pdf(file_path)
+        save_uploaded_file(
+            file,
+            file_path,
+        )
+
+        pages = extract_text_from_pdf(
+            file_path
+        )
 
         chunks = []
         global_chunk_index = 0
@@ -136,6 +183,15 @@ def upload_document(
         new_document.status = "ready"
 
         db.commit()
+
+    except HTTPException:
+        new_document.status = "failed"
+        db.commit()
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+        raise
 
     except Exception:
         new_document.status = "failed"
@@ -210,7 +266,7 @@ def delete_document(
 
     file_path = os.path.join(
         UPLOAD_DIR,
-        filename,
+        f"document_{document.id}.pdf",
     )
 
     deleted_chunks = delete_document_chunks(
