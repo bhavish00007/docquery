@@ -1,19 +1,30 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_access_token
+from app.core.security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+)
 from app.models.company import Company
 from app.models.user import User
+
 
 router = APIRouter()
 
 
 class SignupRequest(BaseModel):
-    company_name: str
+    company_name: str = Field(
+        min_length=1,
+        max_length=100,
+    )
     email: EmailStr
-    password: str
+    password: str = Field(
+        min_length=8,
+        max_length=128,
+    )
 
 
 class LoginRequest(BaseModel):
@@ -22,12 +33,38 @@ class LoginRequest(BaseModel):
 
 
 @router.post("/signup")
-def signup(request: SignupRequest, db: Session = Depends(get_db)):
-    existing_user = db.query(User).filter(User.email == request.email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+def signup(
+    request: SignupRequest,
+    db: Session = Depends(get_db),
+):
+    if not request.company_name.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Company name cannot be empty",
+        )
 
-    new_company = Company(name=request.company_name)
+    if not request.password.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Password cannot be empty",
+        )
+
+    existing_user = (
+        db.query(User)
+        .filter(User.email == request.email)
+        .first()
+    )
+
+    if existing_user:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered",
+        )
+
+    new_company = Company(
+        name=request.company_name.strip()
+    )
+
     db.add(new_company)
     db.commit()
     db.refresh(new_company)
@@ -37,19 +74,52 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
         hashed_password=hash_password(request.password),
         company_id=new_company.id,
     )
+
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    token = create_access_token({"user_id": new_user.id, "company_id": new_company.id})
-    return {"access_token": token, "token_type": "bearer"}
+    token = create_access_token(
+        {
+            "user_id": new_user.id,
+            "company_id": new_company.id,
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+    }
 
 
 @router.post("/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == request.email).first()
-    if not user or not verify_password(request.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+def login(
+    request: LoginRequest,
+    db: Session = Depends(get_db),
+):
+    user = (
+        db.query(User)
+        .filter(User.email == request.email)
+        .first()
+    )
 
-    token = create_access_token({"user_id": user.id, "company_id": user.company_id})
-    return {"access_token": token, "token_type": "bearer"}
+    if not user or not verify_password(
+        request.password,
+        user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid email or password",
+        )
+
+    token = create_access_token(
+        {
+            "user_id": user.id,
+            "company_id": user.company_id,
+        }
+    )
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+    }

@@ -1,4 +1,5 @@
 from app.routes import auth
+from pydantic import ValidationError
 
 
 class FakeQuery:
@@ -80,6 +81,70 @@ def test_signup_rejects_duplicate_email():
     except Exception as exc:
         assert exc.status_code == 400
         assert exc.detail == "Email already registered"
+
+
+def test_signup_rejects_short_password():
+    try:
+        auth.SignupRequest(
+            company_name="Test Company",
+            email="short@example.com",
+            password="1234567",
+        )
+        assert False, "Expected password validation error"
+    except ValidationError as exc:
+        assert "password" in str(exc)
+
+
+def test_signup_rejects_long_password():
+    try:
+        auth.SignupRequest(
+            company_name="Test Company",
+            email="long@example.com",
+            password="a" * 129,
+        )
+        assert False, "Expected password validation error"
+    except ValidationError as exc:
+        assert "password" in str(exc)
+
+
+def test_signup_rejects_whitespace_password():
+    fake_db = FakeDB()
+
+    request = auth.SignupRequest(
+        company_name="Test Company",
+        email="spaces@example.com",
+        password="        ",
+    )
+
+    try:
+        auth.signup(
+            request=request,
+            db=fake_db,
+        )
+        assert False, "Expected whitespace password error"
+    except Exception as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Password cannot be empty"
+
+
+def test_signup_rejects_whitespace_company_name():
+    fake_db = FakeDB()
+
+    request = auth.SignupRequest(
+        company_name="        ",
+        email="company@example.com",
+        password="password123",
+    )
+
+    try:
+        auth.signup(
+            request=request,
+            db=fake_db,
+        )
+        assert False, "Expected company name validation error"
+    except Exception as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Company name cannot be empty"
 
 
 def test_login_with_correct_password_returns_token(monkeypatch):
