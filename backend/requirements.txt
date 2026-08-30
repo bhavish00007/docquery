@@ -9,4 +9,4 @@ bcrypt==4.0.1
 python-multipart
 pdfplumber
 chromadb
-genai
+google-genai

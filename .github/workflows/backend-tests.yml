@@ -36,4 +36,6 @@ jobs:
           SECRET_KEY: test-secret-key
           GEMINI_API_KEY: test-api-key
           DATABASE_URL: sqlite:///./test.db
+          ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+          ALGORITHM: HS256
         run: pytest -q
