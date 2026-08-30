@@ -1,5 +1,5 @@
 import os
-import shutil
+import re
 
 from fastapi import (
     APIRouter,
@@ -8,9 +8,7 @@ from fastapi import (
     File,
     HTTPException,
 )
-
 from sqlalchemy.orm import Session
-
 import pdfplumber
 
 from app.core.database import get_db
@@ -31,6 +29,35 @@ MAX_FILE_SIZE = 10 * 1024 * 1024
 UPLOAD_CHUNK_SIZE = 1024 * 1024
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def sanitize_filename(filename: str) -> str:
+    filename = os.path.basename(filename)
+    filename = filename.strip()
+
+    # Remove control characters.
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", filename)
+
+    # Replace filesystem-special characters.
+    filename = re.sub(r'[<>:"/\\|?*]', "_", filename)
+
+    if not filename:
+        raise HTTPException(
+            status_code=400,
+            detail="Filename is required",
+        )
+
+    if not filename.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF files are supported",
+        )
+
+    # Keep the stored/displayed filename reasonably bounded.
+    if len(filename) > 255:
+        filename = filename[:251] + ".pdf"
+
+    return filename
 
 
 def extract_text_from_pdf(
@@ -63,33 +90,39 @@ def save_uploaded_file(
     total_size = 0
     first_chunk = True
 
-    with open(file_path, "wb") as buffer:
-        while True:
-            chunk = file.file.read(
-                UPLOAD_CHUNK_SIZE
-            )
-
-            if not chunk:
-                break
-
-            if first_chunk:
-                first_chunk = False
-
-                if not chunk.startswith(b"%PDF-"):
-                    raise HTTPException(
-                        status_code=400,
-                        detail="The uploaded file is not a valid PDF.",
-                    )
-
-            total_size += len(chunk)
-
-            if total_size > MAX_FILE_SIZE:
-                raise HTTPException(
-                    status_code=413,
-                    detail="PDF file size must not exceed 10 MB.",
+    try:
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = file.file.read(
+                    UPLOAD_CHUNK_SIZE
                 )
 
-            buffer.write(chunk)
+                if not chunk:
+                    break
+
+                if first_chunk:
+                    first_chunk = False
+
+                    if not chunk.startswith(b"%PDF-"):
+                        raise HTTPException(
+                            status_code=400,
+                            detail="The uploaded file is not a valid PDF.",
+                        )
+
+                total_size += len(chunk)
+
+                if total_size > MAX_FILE_SIZE:
+                    raise HTTPException(
+                        status_code=413,
+                        detail="PDF file size must not exceed 10 MB.",
+                    )
+
+                buffer.write(chunk)
+
+    except HTTPException:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise
 
 
 @router.post("/upload")
@@ -104,25 +137,16 @@ def upload_document(
             detail="Filename is required",
         )
 
-    original_filename = file.filename.strip()
-
-    if not original_filename:
-        raise HTTPException(
-            status_code=400,
-            detail="Filename is required",
-        )
-
-    if not original_filename.lower().endswith(".pdf"):
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF files are supported",
-        )
+    original_filename = sanitize_filename(
+        file.filename
+    )
 
     existing_document = (
         db.query(Document)
         .filter(
             Document.filename == original_filename,
-            Document.company_id == current_user.company_id,
+            Document.company_id
+            == current_user.company_id,
         )
         .first()
     )
@@ -170,7 +194,6 @@ def upload_document(
             for chunk in page_chunks:
                 chunk.chunk_index = global_chunk_index
                 chunks.append(chunk)
-
                 global_chunk_index += 1
 
         add_chunks(
@@ -181,7 +204,6 @@ def upload_document(
         )
 
         new_document.status = "ready"
-
         db.commit()
 
     except HTTPException:
@@ -225,7 +247,8 @@ def get_documents(
     documents = (
         db.query(Document)
         .filter(
-            Document.company_id == current_user.company_id
+            Document.company_id
+            == current_user.company_id
         )
         .order_by(Document.id.desc())
         .all()
@@ -251,7 +274,8 @@ def delete_document(
         db.query(Document)
         .filter(
             Document.id == document_id,
-            Document.company_id == current_user.company_id,
+            Document.company_id
+            == current_user.company_id,
         )
         .first()
     )
