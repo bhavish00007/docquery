@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -26,37 +27,34 @@ type Message = {
 };
 
 export default function ChatPage() {
+  const router = useRouter();
+
   const [question, setQuestion] = useState("");
-
-  const [messages, setMessages] = useState<Message[]>(
-    []
-  );
-
-  const [chats, setChats] = useState<Chat[]>(
-    []
-  );
-
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [currentChatId, setCurrentChatId] =
     useState<number | null>(null);
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [loadingChats, setLoadingChats] =
-    useState(true);
-
-  const [loadingChat, setLoadingChat] =
-    useState(false);
-
+  const [loading, setLoading] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(true);
+  const [loadingChat, setLoadingChat] = useState(false);
   const [error, setError] = useState("");
+
+  // Mobile sidebar
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  function handleLogout() {
+    localStorage.removeItem("token");
+    router.push("/");
+  }
 
   async function loadChats() {
     try {
-      const token =
-        localStorage.getItem("token");
+      const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Please log in first");
+        router.push("/");
+        return;
       }
 
       const response = await fetch(
@@ -68,6 +66,12 @@ export default function ChatPage() {
         }
       );
 
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        router.push("/");
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
           `Failed to load chats: ${response.status}`
@@ -75,13 +79,9 @@ export default function ChatPage() {
       }
 
       const data = await response.json();
-
       setChats(data);
     } catch (err) {
-      console.error(
-        "Failed to load chats:",
-        err
-      );
+      console.error("Failed to load chats:", err);
 
       setError(
         err instanceof Error
@@ -98,11 +98,11 @@ export default function ChatPage() {
       setLoadingChat(true);
       setError("");
 
-      const token =
-        localStorage.getItem("token");
+      const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Please log in first");
+        router.push("/");
+        return;
       }
 
       const response = await fetch(
@@ -113,6 +113,12 @@ export default function ChatPage() {
           },
         }
       );
+
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        router.push("/");
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -125,11 +131,11 @@ export default function ChatPage() {
       setCurrentChatId(data.chat_id);
       setMessages(data.messages || []);
       setQuestion("");
+
+      // Close mobile sidebar after selecting a chat
+      setSidebarOpen(false);
     } catch (err) {
-      console.error(
-        "Failed to load chat:",
-        err
-      );
+      console.error("Failed to load chat:", err);
 
       setError(
         err instanceof Error
@@ -146,6 +152,9 @@ export default function ChatPage() {
     setMessages([]);
     setQuestion("");
     setError("");
+
+    // Close mobile sidebar
+    setSidebarOpen(false);
   }
 
   async function handleSend() {
@@ -157,11 +166,11 @@ export default function ChatPage() {
       setLoading(true);
       setError("");
 
-      const token =
-        localStorage.getItem("token");
+      const token = localStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Please log in first");
+        router.push("/");
+        return;
       }
 
       const response = await fetch(
@@ -179,9 +188,14 @@ export default function ChatPage() {
         }
       );
 
+      if (response.status === 401) {
+        localStorage.removeItem("token");
+        router.push("/");
+        return;
+      }
+
       if (!response.ok) {
-        const errorText =
-          await response.text();
+        const errorText = await response.text();
 
         console.error(
           "Backend error:",
@@ -198,16 +212,14 @@ export default function ChatPage() {
       setCurrentChatId(data.chat_id);
 
       const userMessage: Message = {
-        message_id:
-          Date.now(),
+        message_id: Date.now(),
         role: "user",
         content: question.trim(),
         sources: [],
       };
 
       const assistantMessage: Message = {
-        message_id:
-          Date.now() + 1,
+        message_id: Date.now() + 1,
         role: "assistant",
         content: data.answer,
         sources: data.sources || [],
@@ -223,10 +235,7 @@ export default function ChatPage() {
 
       await loadChats();
     } catch (err) {
-      console.error(
-        "Query error:",
-        err
-      );
+      console.error("Query error:", err);
 
       setError(
         err instanceof Error
@@ -243,17 +252,56 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <main className="flex min-h-screen bg-gray-50">
+    <main className="flex min-h-screen overflow-hidden bg-gray-50">
+
+      {/* MOBILE SIDEBAR OVERLAY */}
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+        />
+      )}
 
       {/* SIDEBAR */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50
+          flex w-[280px] max-w-[85vw] flex-col
+          border-r bg-white
+          transition-transform duration-200 ease-in-out
+          md:static md:w-72 md:max-w-none md:translate-x-0
+          ${
+            sidebarOpen
+              ? "translate-x-0"
+              : "-translate-x-full"
+          }
+        `}
+      >
 
-      <aside className="hidden w-72 flex-col border-r bg-white md:flex">
-
+        {/* SIDEBAR HEADER */}
         <div className="border-b p-5">
-          <div className="text-xl font-semibold">
-            DocQuery
+
+          <div className="flex items-center justify-between">
+
+            <div className="text-xl font-semibold">
+              DocQuery
+            </div>
+
+            {/* MOBILE CLOSE BUTTON */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              aria-label="Close sidebar"
+              className="rounded-lg px-2 py-1 text-2xl leading-none text-gray-500 hover:bg-gray-100 md:hidden"
+            >
+              ×
+            </button>
+
           </div>
 
+          {/* NEW CHAT */}
           <button
             type="button"
             onClick={handleNewChat}
@@ -261,8 +309,31 @@ export default function ChatPage() {
           >
             + New chat
           </button>
+
+          {/* DOCUMENTS */}
+          <button
+            type="button"
+            onClick={() => {
+              setSidebarOpen(false);
+              router.push("/documents");
+            }}
+            className="mt-3 w-full rounded-lg border px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Documents
+          </button>
+
+          {/* LOGOUT */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-3 w-full rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+          >
+            Logout
+          </button>
+
         </div>
 
+        {/* RECENT CHATS */}
         <div className="flex-1 overflow-y-auto p-4">
 
           <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">
@@ -292,8 +363,7 @@ export default function ChatPage() {
                   loadChat(chat.chat_id)
                 }
                 className={`w-full rounded-lg px-3 py-2.5 text-left text-sm transition ${
-                  currentChatId ===
-                  chat.chat_id
+                  currentChatId === chat.chat_id
                     ? "bg-gray-100 font-medium text-gray-900"
                     : "text-gray-600 hover:bg-gray-50"
                 }`}
@@ -309,24 +379,43 @@ export default function ChatPage() {
       </aside>
 
       {/* MAIN CHAT */}
+      <section className="flex min-h-screen min-w-0 flex-1 flex-col">
 
-      <section className="flex min-h-screen flex-1 flex-col">
+        {/* HEADER */}
+        <header className="border-b bg-white px-4 py-4 sm:px-6">
 
-        <header className="border-b bg-white px-6 py-4">
-          <h1 className="text-lg font-semibold">
-            Document Chat
-          </h1>
+          <div className="flex items-center gap-3">
 
-          <p className="text-sm text-gray-500">
-            Ask questions about your uploaded
-            documents
-          </p>
+            {/* MOBILE MENU BUTTON */}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open sidebar"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-300 bg-white text-xl text-gray-700 hover:bg-gray-50 md:hidden"
+            >
+              ☰
+            </button>
+
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold">
+                Document Chat
+              </h1>
+
+              <p className="truncate text-sm text-gray-500">
+                Ask questions about your uploaded documents
+              </p>
+            </div>
+
+          </div>
+
         </header>
 
-        <div className="flex flex-1 justify-center px-6 py-10">
+        {/* CHAT AREA */}
+        <div className="flex min-h-0 flex-1 justify-center px-3 py-5 sm:px-6 sm:py-10">
 
-          <div className="w-full max-w-3xl">
+          <div className="flex w-full max-w-3xl flex-col">
 
+            {/* LOADING CHAT */}
             {loadingChat && (
               <div className="mb-6 rounded-xl border bg-white p-6 text-center shadow-sm">
                 <p className="text-sm text-gray-500">
@@ -335,24 +424,25 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* EMPTY CHAT */}
             {!loadingChat &&
               messages.length === 0 &&
               !loading && (
-                <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
+                <div className="flex min-h-[55vh] flex-col items-center justify-center px-4 text-center">
 
-                  <h2 className="text-3xl font-semibold text-gray-900">
+                  <h2 className="text-2xl font-semibold text-gray-900 sm:text-3xl">
                     Ask your documents
                   </h2>
 
-                  <p className="mt-2 text-gray-500">
-                    Upload documents and ask
-                    questions to get grounded
-                    answers.
+                  <p className="mt-2 max-w-xl text-sm text-gray-500 sm:text-base">
+                    Upload documents and ask questions
+                    to get grounded answers.
                   </p>
 
                 </div>
               )}
 
+            {/* MESSAGES */}
             <div className="space-y-6">
 
               {messages.map((message) => (
@@ -368,52 +458,41 @@ export default function ChatPage() {
                   <div
                     className={
                       message.role === "user"
-                        ? "max-w-[80%] rounded-2xl bg-black px-5 py-3 text-sm text-white"
-                        : "w-full rounded-xl border bg-white p-6 shadow-sm"
+                        ? "max-w-[90%] rounded-2xl bg-black px-4 py-3 text-sm text-white sm:max-w-[80%] sm:px-5"
+                        : "w-full rounded-xl border bg-white p-4 shadow-sm sm:p-6"
                     }
                   >
 
-                    {message.role ===
-                      "assistant" ? (
+                    {message.role === "assistant" ? (
                       <>
                         <h3 className="mb-3 text-sm font-semibold text-gray-500">
                           Answer
                         </h3>
 
-                        <div className="text-sm leading-7 text-gray-900">
+                        <div className="break-words text-sm leading-7 text-gray-900">
 
                           <ReactMarkdown
-                            remarkPlugins={[
-                              remarkGfm,
-                            ]}
+                            remarkPlugins={[remarkGfm]}
                             components={{
-                              p: ({
-                                children,
-                              }) => (
+                              p: ({ children }) => (
                                 <p className="mb-3 last:mb-0">
                                   {children}
                                 </p>
                               ),
 
-                              ul: ({
-                                children,
-                              }) => (
+                              ul: ({ children }) => (
                                 <ul className="mb-3 list-disc space-y-1 pl-6">
                                   {children}
                                 </ul>
                               ),
 
-                              ol: ({
-                                children,
-                              }) => (
+                              ol: ({ children }) => (
                                 <ol className="mb-3 list-decimal space-y-1 pl-6">
                                   {children}
                                 </ol>
                               ),
 
-                              strong: ({
-                                children,
-                              }) => (
+                              strong: ({ children }) => (
                                 <strong className="font-semibold">
                                   {children}
                                 </strong>
@@ -425,9 +504,9 @@ export default function ChatPage() {
 
                         </div>
 
+                        {/* SOURCES */}
                         {message.sources &&
-                          message.sources.length >
-                            0 && (
+                          message.sources.length > 0 && (
                             <div className="mt-6 border-t pt-5">
 
                               <h3 className="mb-3 text-sm font-semibold text-gray-500">
@@ -437,27 +516,22 @@ export default function ChatPage() {
                               <div className="space-y-2">
 
                                 {message.sources.map(
-                                  (
-                                    source,
-                                    index
-                                  ) => (
+                                  (source, index) => (
                                     <div
                                       key={`${source.filename}-${source.page_number}-${source.chunk_index}-${index}`}
                                       className="rounded-lg border bg-gray-50 p-3"
                                     >
-                                      <p className="text-sm font-medium text-gray-900">
+
+                                      <p className="break-words text-sm font-medium text-gray-900">
                                         📄{" "}
-                                        {
-                                          source.filename
-                                        }
+                                        {source.filename}
                                       </p>
 
                                       <p className="mt-1 text-xs text-gray-500">
                                         Page{" "}
-                                        {
-                                          source.page_number
-                                        }
+                                        {source.page_number}
                                       </p>
+
                                     </div>
                                   )
                                 )}
@@ -465,9 +539,10 @@ export default function ChatPage() {
                               </div>
                             </div>
                           )}
+
                       </>
                     ) : (
-                      <p className="whitespace-pre-wrap">
+                      <p className="whitespace-pre-wrap break-words">
                         {message.content}
                       </p>
                     )}
@@ -478,6 +553,7 @@ export default function ChatPage() {
 
             </div>
 
+            {/* SEARCHING */}
             {loading && (
               <div className="mt-6 rounded-xl border bg-white p-5 shadow-sm">
                 <p className="text-sm text-gray-500">
@@ -486,48 +562,43 @@ export default function ChatPage() {
               </div>
             )}
 
+            {/* ERROR */}
             {error && (
               <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
-                <p className="text-sm text-red-600">
+                <p className="break-words text-sm text-red-600">
                   {error}
                 </p>
               </div>
             )}
 
-            <div className="mt-6 flex rounded-xl border bg-white p-2 shadow-sm">
+            {/* INPUT */}
+            <div className="mt-6 flex min-w-0 rounded-xl border bg-white p-2 shadow-sm">
 
               <input
                 type="text"
                 value={question}
                 onChange={(event) =>
-                  setQuestion(
-                    event.target.value
-                  )
+                  setQuestion(event.target.value)
                 }
                 onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter"
-                  ) {
+                  if (event.key === "Enter") {
                     handleSend();
                   }
                 }}
                 placeholder="Ask something about your documents..."
                 disabled={loading}
-                className="flex-1 px-3 py-3 text-sm outline-none disabled:bg-gray-50"
+                className="min-w-0 flex-1 px-2 py-3 text-sm outline-none disabled:bg-gray-50 sm:px-3"
               />
 
               <button
                 type="button"
                 onClick={handleSend}
                 disabled={
-                  loading ||
-                  !question.trim()
+                  loading || !question.trim()
                 }
-                className="rounded-lg bg-black px-5 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 sm:px-5"
               >
-                {loading
-                  ? "Sending..."
-                  : "Send"}
+                {loading ? "Sending..." : "Send"}
               </button>
 
             </div>

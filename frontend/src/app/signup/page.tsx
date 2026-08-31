@@ -16,7 +16,11 @@ export default function SignupPage() {
   async function handleSignup(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!companyName.trim() || !email.trim() || !password.trim()) {
+    if (
+      !companyName.trim() ||
+      !email.trim() ||
+      !password.trim()
+    ) {
       setError("Please fill in all fields");
       return;
     }
@@ -43,17 +47,15 @@ export default function SignupPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(
-          data.detail || "Signup failed"
-        );
+        throw new Error(data.detail || "Signup failed");
       }
 
-      localStorage.setItem(
-        "token",
-        data.access_token
-      );
-
-      router.push("/chat");
+      if (data.access_token) {
+        localStorage.setItem("token", data.access_token);
+        router.push("/chat");
+      } else {
+        router.push("/login");
+      }
     } catch (err) {
       console.error("Signup error:", err);
 
@@ -68,32 +70,74 @@ export default function SignupPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-semibold text-gray-900">
-            Create your account
-          </h1>
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "450px",
+        }}
+      >
+        <h1
+          className="font-serif"
+          style={{
+            fontSize: "26px",
+            fontWeight: 500,
+            marginBottom: "8px",
+          }}
+        >
+          DocQuery
+        </h1>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Create a company workspace for DocQuery
-          </p>
-        </div>
+        <p
+          style={{
+            color: "var(--color-taupe)",
+            fontSize: "14px",
+            marginBottom: "32px",
+          }}
+        >
+          Create your DocQuery account
+        </p>
 
         {error && (
-          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="text-sm text-red-600">
+          <div
+            style={{
+              marginBottom: "16px",
+              padding: "10px 12px",
+              border: "1px solid #f0b4b4",
+              borderRadius: "6px",
+              background: "#fff5f5",
+            }}
+          >
+            <p
+              style={{
+                margin: 0,
+                color: "var(--color-error)",
+                fontSize: "13px",
+              }}
+            >
               {error}
             </p>
           </div>
         )}
 
-        <form
-          onSubmit={handleSignup}
-          className="space-y-5"
-        >
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+        <form onSubmit={handleSignup}>
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                color: "var(--color-muted-text)",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Company name
             </label>
 
@@ -104,12 +148,28 @@ export default function SignupPage() {
                 setCompanyName(event.target.value)
               }
               placeholder="Enter company name"
-              className="w-full rounded-lg border px-4 py-3 text-sm outline-none focus:border-black"
+              required
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                border: "1px solid var(--color-border)",
+                borderRadius: "6px",
+                fontSize: "14px",
+                background: "white",
+              }}
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+          <div style={{ marginBottom: "16px" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                color: "var(--color-muted-text)",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Email
             </label>
 
@@ -120,12 +180,28 @@ export default function SignupPage() {
                 setEmail(event.target.value)
               }
               placeholder="Enter your email"
-              className="w-full rounded-lg border px-4 py-3 text-sm outline-none focus:border-black"
+              required
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                border: "1px solid var(--color-border)",
+                borderRadius: "6px",
+                fontSize: "14px",
+                background: "white",
+              }}
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+          <div style={{ marginBottom: "24px" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                color: "var(--color-muted-text)",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Password
             </label>
 
@@ -136,27 +212,63 @@ export default function SignupPage() {
                 setPassword(event.target.value)
               }
               placeholder="Create a password"
-              className="w-full rounded-lg border px-4 py-3 text-sm outline-none focus:border-black"
+              required
+              minLength={6}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 12px",
+                border: "1px solid var(--color-border)",
+                borderRadius: "6px",
+                fontSize: "14px",
+                background: "white",
+              }}
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-black px-4 py-3 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{
+              width: "100%",
+              padding: "10px",
+              background: "var(--color-forest)",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "14px",
+              fontWeight: 500,
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1,
+            }}
           >
             {loading ? "Creating account..." : "Sign up"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
+        <p
+          style={{
+            marginTop: "24px",
+            textAlign: "center",
+            fontSize: "14px",
+            color: "var(--color-muted-text)",
+          }}
+        >
           Already have an account?{" "}
           <button
             type="button"
             onClick={() => router.push("/login")}
-            className="font-medium text-black hover:underline"
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              fontSize: "14px",
+              fontWeight: 500,
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
           >
-            Log in
+            Sign in
           </button>
         </p>
       </div>

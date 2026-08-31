@@ -1,11 +1,25 @@
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      router.replace("/chat");
+    } else {
+      router.replace("/login");
+    }
+  }, [router]);
+
   return (
-    <main style={{ padding: "3rem", maxWidth: "680px", margin: "0 auto" }}>
-      <h1 className="font-serif" style={{ fontSize: "28px", fontWeight: 500 }}>
-        DocQuery
-      </h1>
-      <p style={{ color: "var(--color-taupe)", fontFamily: "var(--font-mono)", fontSize: "13px", marginTop: "8px" }}>
-        design system test
+    <main className="flex min-h-screen items-center justify-center bg-gray-50">
+      <p className="text-sm text-gray-500">
+        Loading DocQuery...
       </p>
     </main>
   );

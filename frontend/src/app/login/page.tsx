@@ -8,35 +8,38 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const router = useRouter();
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await fetch(
+        "http://127.0.0.1:8000/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        }
+      );
 
       if (!res.ok) {
         throw new Error("Invalid email or password");
       }
 
-     const data = await res.json();
+      const data = await res.json();
 
-console.log("LOGIN RESPONSE:", data);
-console.log("ACCESS TOKEN:", data.access_token);
+      localStorage.setItem("token", data.access_token);
 
-localStorage.setItem("token", data.access_token);
-
-console.log(
-  "TOKEN SAVED:",
-  localStorage.getItem("token")
-);
       router.push("/chat");
     } catch (err) {
       setError("Invalid email or password");
@@ -46,20 +49,55 @@ console.log(
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ width: "360px" }}>
-        <h1 className="font-serif" style={{ fontSize: "26px", fontWeight: 500, marginBottom: "8px" }}>
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "450px",
+        }}
+      >
+        <h1
+          className="font-serif"
+          style={{
+            fontSize: "26px",
+            fontWeight: 500,
+            marginBottom: "8px",
+          }}
+        >
           DocQuery
         </h1>
-        <p style={{ color: "var(--color-taupe)", fontSize: "14px", marginBottom: "32px" }}>
-          Sign in to your workspace
+
+        <p
+          style={{
+            color: "var(--color-taupe)",
+            fontSize: "14px",
+            marginBottom: "32px",
+          }}
+        >
+            Sign in to your account
         </p>
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: "16px" }}>
-            <label style={{ fontSize: "13px", color: "var(--color-muted-text)", display: "block", marginBottom: "6px" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                color: "var(--color-muted-text)",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Email
             </label>
+
             <input
               type="email"
               value={email}
@@ -67,6 +105,7 @@ console.log(
               required
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "10px 12px",
                 border: "1px solid var(--color-border)",
                 borderRadius: "6px",
@@ -77,9 +116,17 @@ console.log(
           </div>
 
           <div style={{ marginBottom: "24px" }}>
-            <label style={{ fontSize: "13px", color: "var(--color-muted-text)", display: "block", marginBottom: "6px" }}>
+            <label
+              style={{
+                fontSize: "13px",
+                color: "var(--color-muted-text)",
+                display: "block",
+                marginBottom: "6px",
+              }}
+            >
               Password
             </label>
+
             <input
               type="password"
               value={password}
@@ -87,6 +134,7 @@ console.log(
               required
               style={{
                 width: "100%",
+                boxSizing: "border-box",
                 padding: "10px 12px",
                 border: "1px solid var(--color-border)",
                 borderRadius: "6px",
@@ -97,7 +145,13 @@ console.log(
           </div>
 
           {error && (
-            <p style={{ color: "var(--color-error)", fontSize: "13px", marginBottom: "16px" }}>
+            <p
+              style={{
+                color: "var(--color-error)",
+                fontSize: "13px",
+                marginBottom: "16px",
+              }}
+            >
               {error}
             </p>
           )}
@@ -114,12 +168,39 @@ console.log(
               borderRadius: "6px",
               fontSize: "14px",
               fontWeight: 500,
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.7 : 1,
             }}
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <p
+          style={{
+            marginTop: "24px",
+            textAlign: "center",
+            fontSize: "14px",
+            color: "var(--color-muted-text)",
+          }}
+        >
+          Don't have an account?{" "}
+          <button
+            type="button"
+            onClick={() => router.push("/signup")}
+            style={{
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              fontSize: "14px",
+              fontWeight: 500,
+              cursor: "pointer",
+              textDecoration: "underline",
+            }}
+          >
+            Sign up
+          </button>
+        </p>
       </div>
     </main>
   );
